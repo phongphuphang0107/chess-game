@@ -1808,60 +1808,10 @@
       }
     }
 
-    // Quét các mối đe dọa quân Trắng khi tới lượt bé (Hướng dẫn chạy cờ)
-    function scanWhiteThreats() {
-      if (gameState.isGameOver || gameState.turn !== 'w') return [];
-      const threats = [];
-      const blackMoves = generateAllMoves('b', gameState.board, gameState.enPassantTarget);
-      blackMoves.forEach(m => {
-        const targetPiece = gameState.board[m.to.r][m.to.c];
-        if (targetPiece && isWhite(targetPiece)) {
-          if (!threats.some(t => t.threatenedPos.r === m.to.r && t.threatenedPos.c === m.to.c)) {
-            threats.push({
-              threatenedPiece: targetPiece,
-              threatenedPos: m.to,
-              attackerPos: m.from,
-              attackerPiece: gameState.board[m.from.r][m.from.c]
-            });
-          }
-        }
-      });
-      const order = { 'K': 100, 'Q': 90, 'R': 50, 'B': 30, 'N': 30, 'P': 10 };
-      threats.sort((a, b) => (order[b.threatenedPiece] || 0) - (order[a.threatenedPiece] || 0));
-      return threats;
-    }
-
-    // Kiểm tra xem nước đi của bé có an toàn khỏi tầm ngắm của cờ Đen không
-    function isEscapeMoveSafe(targetPos) {
-      const simulatedBoard = gameState.board.map(row => [...row]);
-      if (gameState.selectedSquare) {
-        const piece = simulatedBoard[gameState.selectedSquare.r][gameState.selectedSquare.c];
-        simulatedBoard[gameState.selectedSquare.r][gameState.selectedSquare.c] = null;
-        simulatedBoard[targetPos.r][targetPos.c] = piece;
-      }
-      const blackMoves = generateAllMoves('b', simulatedBoard, null);
-      return !blackMoves.some(m => m.to.r === targetPos.r && m.to.c === targetPos.c);
-    }
-
-    // Vẽ bàn cờ 32 quân chuẩn (Tích hợp Radar Hướng dẫn Ăn Cờ & Chạy Cờ)
+    // Vẽ bàn cờ 32 quân chuẩn (Đã tắt chế độ Bị Dọa để bàn cờ thông thoáng, dễ nhìn)
     function renderFullChessboard() {
       const boardEl = document.getElementById('fullChessboard');
       boardEl.innerHTML = '';
-
-      const activeThreats = scanWhiteThreats();
-      const isSelectedPieceThreatened = gameState.selectedSquare && activeThreats.some(t => t.threatenedPos.r === gameState.selectedSquare.r && t.threatenedPos.c === gameState.selectedSquare.c);
-
-      // Cập nhật lời nhắc chạy cờ nếu có quân Trắng đang bị dọa ăn và bé chưa chọn quân
-      if (gameState.turn === 'w' && !gameState.selectedSquare && activeThreats.length > 0 && !gameState.isGameOver) {
-        const topThreat = activeThreats[0];
-        const threatName = (PIECE_NAMES[topThreat.threatenedPiece] || { name: 'quân Trắng' }).name;
-        const threatCoord = `${String.fromCharCode(97 + topThreat.threatenedPos.c)}${8 - topThreat.threatenedPos.r}`;
-        const attackerName = (PIECE_NAMES[topThreat.attackerPiece] || { name: 'quân Đen' }).name;
-        const threatMsg = `⚠️ Báo động chạy cờ: Bạn ${threatName} ở ô ${threatCoord} đang bị ${attackerName} dọa ăn! Bé hãy chạm vào bạn ấy để chạy cờ sang ô an toàn nhé!`;
-        document.getElementById('coachingHint').innerText = threatMsg;
-        const arenaHint = document.getElementById('arenaCoachingHint');
-        if (arenaHint) arenaHint.innerText = threatMsg;
-      }
 
       for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
@@ -1882,18 +1832,10 @@
             cell.classList.add('center-highlight');
           }
 
-          // Cảnh báo quân Trắng đang bị dọa ăn (Hiển thị nhãn ⚠️ BỊ DỌA!)
-          const isThreatened = activeThreats.some(t => t.threatenedPos.r === r && t.threatenedPos.c === c);
-          if (isThreatened && pieceCode && isWhite(pieceCode) && !isSelected) {
-            cell.classList.add('threat-danger');
-          }
-
-          // Gợi ý nước đi: Ăn cờ hoặc Chạy cờ an toàn
+          // Gợi ý nước đi: ô ăn quân viền đỏ, ô đi thường chấm vàng
           if (validMove) {
             if (validMove.isCapture) {
               cell.classList.add('highlight-capture'); // Vòng đỏ xung điện + nhãn 🎯 ĂN!
-            } else if (isSelectedPieceThreatened && isEscapeMoveSafe(validMove)) {
-              cell.classList.add('highlight-escape');  // Lá chắn xanh 🛡️ + nhãn AN TOÀN!
             } else {
               cell.classList.add('highlight');         // Chấm vàng tiêu chuẩn
             }
@@ -1956,19 +1898,14 @@
           document.getElementById('selectedPieceDesc').innerText = guidance ? guidance.text : info.desc;
           document.getElementById('selectedPieceIcon').innerHTML = getPieceSvg(clickedPiece);
 
-          // 1. Kiểm tra nếu quân được chọn có thể ĂN CỜ đối thủ ngay
+          // Gợi ý nước đi khi chạm vào quân cờ
           const captureMove = gameState.validMoves.find(m => m.isCapture);
-          // 2. Kiểm tra nếu quân được chọn đang BỊ DỌA ĂN cần chạy cờ
-          const isThreatenedNow = scanWhiteThreats().some(t => t.threatenedPos.r === r && t.threatenedPos.c === c);
-
           let hintMsg = `✨ ${info.name}: Bé chạm vào ô chấm vàng để đi nhé!`;
           if (captureMove) {
             const enemyCode = gameState.board[captureMove.r][captureMove.c];
             const enemyInfo = PIECE_NAMES[enemyCode] || { name: 'quân Đen' };
             const coordName = `${String.fromCharCode(97 + captureMove.c)}${8 - captureMove.r}`;
             hintMsg = `🎯 Cơ hội ăn cờ: Bé hãy chạm vào ô vòng đỏ (${coordName}) để ${info.name} ăn ${enemyInfo.name} nhé!`;
-          } else if (isThreatenedNow) {
-            hintMsg = `🚨 Bạn ${info.name} đang bị dọa ăn! Bé hãy chạm vào ô có lá chắn xanh 🛡️ để chạy cờ an toàn nhé!`;
           }
 
           document.getElementById('coachingHint').innerText = hintMsg;
